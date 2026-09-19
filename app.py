@@ -599,62 +599,11 @@ def sankey(sol):
 
 
 
-def label_objective(name: str) -> str:
-    return {
-        "Profit Max": "Nilai Ekonomi Maksimum",
-        "Balanced — Excess Min": "Seimbang — Kurangi Excess",
-        "Energy Efficient": "Efisiensi Energi",
-    }.get(name, name)
-
-
-def explain(model, p, sol):
-    cards = []
-    econ = p["contribution_loin"]
-    j = int(np.argmax(econ))
-    cards.append((
-        "01",
-        f"Prioritaskan {SKUS[j]}",
-        f"Nilai routing saat ini paling tinggi, yaitu {fmt_rp(econ[j])} per kg loin di antara rute yang dimodelkan dan memenuhi eligibility."
-    ))
-
-    coverage = np.divide(sol.stock_used, p["po"], out=np.zeros_like(p["po"]), where=p["po"] > 0)
-    if coverage.max() > 0:
-        k = int(np.argmax(coverage))
-        cards.append((
-            "02",
-            f"Gunakan stok {SKUS[k]} lebih dahulu",
-            f"Stok FG yang tersedia sudah menutup sekitar {fmt_pct(coverage[k])} dari PO, sehingga DSS mengurangi kebutuhan produksi ulang SKU yang sama."
-        ))
-
-    residual = sol.residual_by_resource.sum()
-    if residual > 1:
-        i = int(np.argmax(sol.residual_by_resource))
-        cards.append((
-            "03",
-            "Tindak lanjuti resource yang masih tersisa",
-            f"Masih ada {fmt_kg(sol.residual_by_resource[i])} dari {RESOURCE_GROUPS[i]} yang belum dialokasikan. Evaluasi buyer alternatif, WIP periode berikutnya, atau rute produk lain yang sudah tervalidasi."
-        ))
-
-    if sol.energy_intensity > model["historical_intensity"]:
-        cards.append((
-            "04",
-            "Trade-off energi terlihat",
-            f"Intensitas produksi baru {sol.energy_intensity:.3f} kWh/kg, dibanding historis {model['historical_intensity']:.3f} kWh/kg. Gunakan mode Efisiensi Energi bila target energi menjadi prioritas."
-        ))
-    else:
-        cards.append((
-            "04",
-            "Intensitas energi terkendali",
-            f"Intensitas produksi baru {sol.energy_intensity:.3f} kWh/kg, dibanding historis {model['historical_intensity']:.3f} kWh/kg."
-        ))
-    return cards
-
-
-
 # ============================================================
-# V4 UI — ARUNA BLUE + ORANGE / USER-FRIENDLY
+# V5 UI — RAW MATERIAL ALLOCATION CONTROL TOWER
 # ============================================================
-# Override the visual palette without touching the optimizer logic.
+LOGO_PATH = Path(__file__).with_name("aruna_logo.png")
+
 NAVY = "#075F92"
 NAVY_2 = "#0B3E5B"
 TEAL = "#0D8EAF"
@@ -665,368 +614,295 @@ MUTED = "#71828E"
 BG = "#F7F6F2"
 BORDER = "#E4E7E9"
 SOFT_AMBER = "#FFF1E7"
-LOGO_PATH = Path(__file__).with_name("aruna_logo.png")
 
 st.markdown(
     f"""
     <style>
     .stApp {{background:{BG};}}
-    .block-container {{max-width:1480px; padding-top:1.15rem; padding-bottom:3rem;}}
-    [data-testid="stSidebar"] {{
-        background:linear-gradient(180deg,#075F92 0%,#064D78 100%)!important;
-        border-right:0!important; min-width:278px!important; max-width:278px!important;
-    }}
+    .block-container {{max-width:1520px; padding-top:1.0rem; padding-bottom:3rem;}}
+    [data-testid="stSidebar"] {{background:linear-gradient(180deg,#075F92 0%,#064B73 100%)!important; border-right:0!important; min-width:270px!important; max-width:270px!important;}}
+    [data-testid="stSidebar"] label,
+[data-testid="stSidebar"] p,
+[data-testid="stSidebar"] .stMarkdown,
+[data-testid="stSidebar"] .stCaption {{
+    color:#F6FBFD !important;
+}}
+[data-testid="stSidebar"] input,
+[data-testid="stSidebar"] textarea,
+[data-testid="stSidebar"] [data-baseweb="select"] * {{
+    color:#17384C !important;
+}}
+[data-testid="stDataFrame"] *,
+[data-testid="stDataEditor"] * {{
+    color:#17384C;
+}}
+.stSelectbox label,
+.stRadio label,
+.stSlider label,
+.stNumberInput label,
+.stToggle label,
+.stFileUploader label {{
+    color:#17384C !important;
+}}
+    [data-testid="stSidebar"] .stCaption {{color:#CDE6F1!important;}}
+    [data-testid="stSidebar"] [data-testid="stFileUploader"] {{background:rgba(255,255,255,.08); border:1px solid rgba(255,255,255,.16); border-radius:13px; padding:.4rem;}}
+    .aruna-logo-box {{background:white;border-radius:14px;padding:.45rem .65rem;margin:.05rem 0 .75rem;}}
+    .side-title {{font-size:1.08rem;font-weight:850;color:white;letter-spacing:-.02em;}}
+    .side-sub {{font-size:.75rem;color:#D6EAF3;line-height:1.42;margin:.2rem 0 .7rem;}}
+    .scenario-box {{background:rgba(255,255,255,.10);border:1px solid rgba(255,255,255,.18);border-radius:14px;padding:.7rem .78rem;margin:.7rem 0;}}
+    .scenario-box b {{color:white;font-size:.82rem;}} .scenario-box div {{font-size:.7rem;color:#D8EBF3;line-height:1.5;margin-top:.2rem;}}
+    .topbar {{background:white;border:1px solid {BORDER};border-bottom:4px solid {AMBER};border-radius:18px;padding:.95rem 1.15rem;box-shadow:0 4px 16px rgba(20,61,82,.05);margin-bottom:1rem;}}
+    .top-kicker {{font-size:.7rem;color:{TEAL};font-weight:850;text-transform:uppercase;letter-spacing:.11em;}}
+    .top-title {{font-size:1.72rem;color:{NAVY_2};font-weight:880;letter-spacing:-.035em;line-height:1.12;margin:.15rem 0;}}
+    .top-sub {{font-size:.9rem;color:{MUTED};line-height:1.48;max-width:1050px;}}
+    .pill {{display:inline-block;margin:.48rem .28rem 0 0;padding:.34rem .62rem;border-radius:999px;font-size:.7rem;font-weight:780;background:#EAF6F9;color:#08728B;}}
+    .pill.orange {{background:#FFF0E6;color:#D05814;}}
+    .kpi {{background:white;border:1px solid {BORDER};border-top:4px solid {TEAL};border-radius:15px;padding:.82rem .9rem;min-height:112px;box-shadow:0 3px 10px rgba(20,61,82,.035);}}
+    .kpi.orange {{border-top-color:{AMBER};}} .kpi-label {{font-size:.68rem;color:{MUTED};font-weight:820;text-transform:uppercase;letter-spacing:.055em;}}
+    .kpi-value {{font-size:1.55rem;color:{NAVY_2};font-weight:880;letter-spacing:-.03em;line-height:1.1;margin:.22rem 0 .12rem;}}
+    .kpi-value.text {{font-size:1.12rem;line-height:1.2;}} .kpi-note {{font-size:.7rem;color:#647C87;line-height:1.35;}}
+    .dashboard-panel {{background:white;border:1px solid {BORDER};border-radius:16px;padding:.85rem .9rem;box-shadow:0 3px 10px rgba(20,61,82,.03);}}
+    .panel-head {{font-size:.94rem;font-weight:830;color:{NAVY_2};}} .panel-sub2 {{font-size:.75rem;color:{MUTED};line-height:1.4;margin:.15rem 0 .5rem;}}
+    .scenario-card-v5 {{background:white;border:1px solid {BORDER};border-radius:15px;padding:.82rem .88rem;min-height:145px;}}
+    .scenario-card-v5.active {{border:2px solid {AMBER};background:#FFF9F4;}}
+    .sc-title {{font-size:.92rem;font-weight:850;color:{NAVY_2};}} .sc-value {{font-size:1.28rem;font-weight:880;color:{NAVY_2};margin:.3rem 0;}}
+    .sc-note {{font-size:.72rem;color:{MUTED};line-height:1.45;}}
+    [data-testid="stForm"] {{background:white!important;border:1px solid {BORDER}!important;border-radius:17px!important;padding:.9rem 1rem!important;}}
+    [data-testid="stFormSubmitButton"] button {{background:{AMBER}!important;color:white!important;border:0!important;border-radius:12px!important;min-height:48px!important;font-weight:880!important;}}
+    .stButton > button {{background:white!important;color:{NAVY_2}!important;border:1px solid #BDD4DE!important;border-radius:11px!important;min-height:40px!important;font-weight:770!important;}}
+    .stButton > button[kind="primary"] {{background:{AMBER}!important;color:white!important;border-color:{AMBER}!important;}}
+    .stDownloadButton > button {{border-radius:11px!important;min-height:40px!important;font-weight:770!important;}}
+    div[data-testid="stDataFrame"] {{border-radius:13px;overflow:hidden;border:1px solid {BORDER};}}
+    .section-title {{font-size:1.12rem!important;}} .section-kicker {{font-weight:850!important;}}
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
+
+# ---- Final readability overrides ----
+# Keep text dark on light content surfaces and white only on the blue sidebar.
+st.markdown(
+    """
+    <style>
+    .dashboard-panel,
+    .kpi,
+    .scenario-card-v5,
+    .topbar,
+    [data-testid="stForm"] {
+        color: #17384C !important;
+    }
+    .dashboard-panel *,
+    .kpi *,
+    .scenario-card-v5 *,
+    .topbar *,
+    [data-testid="stForm"] label,
+    [data-testid="stForm"] p,
+    [data-testid="stForm"] span {
+        color: #17384C;
+    }
+    [data-testid="stSidebar"] {
+        color: #F6FBFD !important;
+    }
     [data-testid="stSidebar"] label,
     [data-testid="stSidebar"] p,
-    [data-testid="stSidebar"] span {{color:#F4FBFF;}}
-    [data-testid="stSidebar"] .stCaption {{color:#CDE6F1!important;}}
-    [data-testid="stSidebar"] [data-testid="stFileUploader"] {{
-        background:rgba(255,255,255,.08); border:1px solid rgba(255,255,255,.17);
-        border-radius:14px; padding:.45rem;
-    }}
-    .v4-logo {{background:white; border-radius:14px; padding:.45rem .65rem; margin:.1rem 0 .7rem;}}
-    .v4-side-title {{font-size:1.08rem; font-weight:850; color:white; letter-spacing:-.02em;}}
-    .v4-side-sub {{font-size:.75rem; color:#D7EAF3; line-height:1.45; margin:.2rem 0 .8rem;}}
-    .v4-scenario {{background:rgba(255,255,255,.10); border:1px solid rgba(255,255,255,.17); border-radius:14px; padding:.72rem .78rem; margin:.7rem 0;}}
-    .v4-scenario b {{color:white; font-size:.82rem;}}
-    .v4-scenario div {{color:#D8EBF3; font-size:.71rem; line-height:1.5; margin-top:.2rem;}}
-
-    .v4-top {{background:white; border:1px solid {BORDER}; border-bottom:4px solid {AMBER}; border-radius:18px; padding:1rem 1.15rem; box-shadow:0 4px 16px rgba(20,61,82,.05); margin-bottom:1.05rem;}}
-    .v4-kicker {{font-size:.72rem; color:{TEAL}; text-transform:uppercase; letter-spacing:.11em; font-weight:850;}}
-    .v4-title {{font-size:1.72rem; color:{NAVY_2}; font-weight:880; letter-spacing:-.035em; line-height:1.15; margin:.16rem 0;}}
-    .v4-sub {{font-size:.92rem; color:{MUTED}; line-height:1.48; max-width:980px;}}
-    .v4-pill {{display:inline-block; margin:.5rem .28rem 0 0; padding:.34rem .62rem; border-radius:999px; font-size:.72rem; font-weight:780; background:#EAF6F9; color:#08728B;}}
-    .v4-pill.orange {{background:#FFF0E6; color:#D05814;}}
-
-    .section-title {{font-size:1.17rem!important; margin-bottom:.72rem!important;}}
-    .section-kicker {{font-weight:850!important;}}
-    .v4-card {{background:white; border:1px solid {BORDER}; border-top:4px solid {TEAL}; border-radius:16px; padding:.95rem 1rem; min-height:126px; box-shadow:0 3px 11px rgba(20,61,82,.035);}}
-    .v4-card.orange {{border-top-color:{AMBER};}}
-    .v4-label {{font-size:.72rem; color:{MUTED}; font-weight:820; text-transform:uppercase; letter-spacing:.055em;}}
-    .v4-value {{font-size:1.72rem; color:{NAVY_2}; font-weight:880; letter-spacing:-.035em; margin:.24rem 0 .14rem; line-height:1.08;}}
-    .v4-value.text {{font-size:1.2rem; line-height:1.2;}}
-    .v4-note {{font-size:.75rem; color:#607782; line-height:1.38;}}
-
-    .v4-flow {{background:white; border:1px solid {BORDER}; border-radius:18px; padding:1rem 1.05rem; margin:.8rem 0 1rem;}}
-    .v4-flow-grid {{display:grid; grid-template-columns:repeat(5,1fr); gap:.55rem; margin-top:.75rem;}}
-    .v4-step {{background:#F3FAFC; border:1px solid #D8EAF0; border-radius:13px; padding:.72rem; color:{NAVY_2}; font-size:.78rem; font-weight:760; line-height:1.35;}}
-    .v4-num {{display:inline-flex; width:22px; height:22px; border-radius:50%; background:{AMBER}; color:white; align-items:center; justify-content:center; margin-right:.28rem; font-size:.7rem;}}
-    .v4-panel {{background:white; border:1px solid {BORDER}; border-radius:17px; padding:.95rem 1rem; box-shadow:0 3px 11px rgba(20,61,82,.03);}}
-    .v4-panel-title {{font-size:.98rem; color:{NAVY_2}; font-weight:830;}}
-    .v4-panel-sub {{font-size:.8rem; color:{MUTED}; line-height:1.45; margin:.18rem 0 .65rem;}}
-    .v4-choice {{background:white; border:1px solid {BORDER}; border-radius:16px; padding:.9rem .95rem; min-height:160px;}}
-    .v4-choice.active {{border:2px solid {AMBER}; background:#FFF9F4;}}
-    .v4-choice-title {{font-size:.98rem; font-weight:850; color:{NAVY_2};}}
-    .v4-choice-value {{font-size:1.35rem; font-weight:880; color:{NAVY_2}; margin:.3rem 0;}}
-    .v4-choice-note {{font-size:.76rem; color:{MUTED}; line-height:1.45;}}
-
-    div[data-testid="stMetric"] {{min-height:122px!important; padding:.9rem 1rem!important;}}
-    div[data-testid="stMetric"] [data-testid="stMetricValue"] {{font-size:1.7rem!important;}}
-    [data-testid="stForm"] {{background:white!important; border:1px solid {BORDER}!important; border-radius:18px!important; padding:1rem 1.05rem!important;}}
-    [data-testid="stFormSubmitButton"] button {{background:{AMBER}!important; color:white!important; border:0!important; min-height:49px!important; font-weight:880!important; border-radius:12px!important;}}
-    .stButton > button {{background:white!important; border:1px solid #B9D2DD!important; color:{NAVY_2}!important; border-radius:12px!important; min-height:42px!important; font-weight:780!important;}}
-    .stButton > button[kind="primary"] {{background:{AMBER}!important; color:white!important; border-color:{AMBER}!important;}}
-    .stDownloadButton > button {{border-radius:12px!important; min-height:42px!important; font-weight:780!important;}}
-    .callout {{font-size:.84rem!important;}}
-    @media(max-width:1100px) {{.v4-flow-grid {{grid-template-columns:1fr;}}}}
+    [data-testid="stSidebar"] .stMarkdown,
+    [data-testid="stSidebar"] .stCaption {
+        color: #F6FBFD !important;
+    }
+    [data-testid="stSidebar"] input {
+        color: #17384C !important;
+        background: #FFFFFF !important;
+    }
     </style>
     """,
     unsafe_allow_html=True,
 )
 
 
-def v4_card(label, value, note="", orange=False, text=False):
-    cls = "v4-card orange" if orange else "v4-card"
-    vcls = "v4-value text" if text else "v4-value"
-    st.markdown(
-        f'<div class="{cls}"><div class="v4-label">{label}</div>'
-        f'<div class="{vcls}">{value}</div><div class="v4-note">{note}</div></div>',
-        unsafe_allow_html=True,
-    )
+def label_objective(name: str) -> str:
+    return {"Profit Max":"Nilai Ekonomi Maksimum","Balanced — Excess Min":"Seimbang: Kurangi Excess","Energy Efficient":"Efisiensi Energi"}.get(name,name)
 
 
-def topbar(model, source_name):
-    c1,c2 = st.columns([1.15,8.85], vertical_alignment="center")
-    with c1:
-        st.image(str(LOGO_PATH), width=132)
-    with c2:
-        st.markdown(
-            f'''<div class="v4-top">
-            <div class="v4-kicker">Production Decision Support System</div>
-            <div class="v4-title">Perencanaan Produksi Berbasis Sumber Daya</div>
-            <div class="v4-sub">DSS membantu planner memasukkan kondisi aktual, menghitung kombinasi SKU, dan membandingkan dampak nilai ekonomi, excess, serta energi sebelum rencana produksi disetujui.</div>
-            <span class="v4-pill">Database Excel Terhubung</span>
-            <span class="v4-pill">PO #{model['po_number']}</span>
-            <span class="v4-pill orange">Est. Shipment {fmt_date(model['shipment_date'])}</span>
-            </div>''',
-            unsafe_allow_html=True,
-        )
+def kpi(label,value,note="",orange=False,text=False):
+    cls="kpi orange" if orange else "kpi"; vcls="kpi-value text" if text else "kpi-value"
+    st.markdown(f'<div class="{cls}"><div class="kpi-label">{label}</div><div class="{vcls}">{value}</div><div class="kpi-note">{note}</div></div>',unsafe_allow_html=True)
 
 
-# --------------------------
-# Sidebar + source
-# --------------------------
-with st.sidebar:
-    st.markdown('<div class="v4-logo">', unsafe_allow_html=True)
-    st.image(str(LOGO_PATH), width=138)
-    st.markdown('</div>', unsafe_allow_html=True)
-    st.markdown('<div class="v4-side-title">DSS Produksi Aruna</div>', unsafe_allow_html=True)
-    st.markdown('<div class="v4-side-sub">Data aktual → simulasi → rekomendasi → keputusan produksi.</div>', unsafe_allow_html=True)
-    with st.expander("Database & pembaruan data", expanded=False):
-        uploaded = st.file_uploader("Unggah Excel terbaru", type=["xlsx"])
-
-model, source_name = get_model(uploaded)
-
-PAGES = ["Pusat Kendali", "Studio Keputusan", "Rencana Produksi", "Dampak Keputusan", "Data & Model"]
-source_key = f"{source_name}|{model['po_number']}|{model['wgg']}|{model['wip_stsk']}"
-if st.session_state.get("_source_key") != source_key:
-    st.session_state["_source_key"] = source_key
-    st.session_state["scenario_cfg"] = {
-        "objective":"Balanced — Excess Min", "use_stock":True, "retention":.95,
-        "min_fill":0.0, "energy_target":0.0, "energy_active":False,
-        "contract_min":[0.0]*len(SKUS), "wgg_input":float(model["wgg"]),
-        "wip_input":float(model["wip_stsk"]), "po_input":model["po"].astype(float).tolist(),
-        "stock_input":model["stock"].astype(float).tolist(),
-    }
-    st.session_state["decision_log"] = []
-
-cfg = st.session_state["scenario_cfg"].copy()
-if "nav_page" not in st.session_state: st.session_state["nav_page"] = "Pusat Kendali"
-with st.sidebar:
-    page = st.radio("Menu Utama", PAGES, key="nav_page")
-    st.markdown(
-        f'<div class="v4-scenario"><b>Skenario Aktif</b><div>{label_objective(cfg["objective"])}<br>'
-        f'Nilai dipertahankan {cfg["retention"]:.0%}<br>PO #{model["po_number"]}</div></div>',
-        unsafe_allow_html=True,
-    )
-    st.caption("Input di Studio Keputusan hanya simulasi dan tidak mengubah Excel sumber.")
+def explain(model,p,sol):
+    cards=[]; econ=p["contribution_loin"]; j=int(np.argmax(econ))
+    cards.append((f"Prioritaskan {SKUS[j]}",f"Nilai routing paling tinggi pada kondisi aktif: {fmt_rp(econ[j])}/kg loin."))
+    coverage=np.divide(sol.stock_used,p["po"],out=np.zeros_like(p["po"]),where=p["po"]>0)
+    if coverage.max()>0:
+        k=int(np.argmax(coverage)); cards.append((f"Gunakan stok {SKUS[k]} lebih dulu",f"Stok sudah menutup sekitar {fmt_pct(coverage[k])} dari PO sehingga produksi ulang dapat dikurangi."))
+    if sol.residual_by_resource.sum()>1:
+        i=int(np.argmax(sol.residual_by_resource)); cards.append(("Tindak lanjuti sisa resource",f"{fmt_kg(sol.residual_by_resource[i])} dari {RESOURCE_GROUPS[i]} belum memperoleh rute pada shipment ini."))
+    return cards
 
 
-def goto(name): st.session_state["nav_page"] = name
+def goto(name): st.session_state["_pending_nav"]=name
 
-def set_obj(obj):
-    c=st.session_state["scenario_cfg"].copy(); c["objective"]=obj; st.session_state["scenario_cfg"]=c
+def set_obj(name):
+    c=st.session_state["scenario_cfg"].copy();c["objective"]=name;st.session_state["scenario_cfg"]=c
 
 def reset_data():
-    c=st.session_state["scenario_cfg"].copy()
-    c.update({"objective":"Balanced — Excess Min","use_stock":True,"retention":.95,"min_fill":0.0,
-              "energy_target":0.0,"energy_active":False,"contract_min":[0.0]*len(SKUS),
-              "wgg_input":float(model["wgg"]),"wip_input":float(model["wip_stsk"]),
-              "po_input":model["po"].astype(float).tolist(),"stock_input":model["stock"].astype(float).tolist()})
-    st.session_state["scenario_cfg"]=c
+    c=st.session_state["scenario_cfg"].copy();c.update({"objective":"Balanced — Excess Min","use_stock":True,"retention":.95,"min_fill":0.0,"energy_target":0.0,"energy_active":False,"contract_min":[0.0]*len(SKUS),"wgg_input":float(model["wgg"]),"wip_input":float(model["wip_stsk"]),"po_input":model["po"].astype(float).tolist(),"stock_input":model["stock"].astype(float).tolist()});st.session_state["scenario_cfg"]=c
 
 def preset(kind):
-    if kind=="reset": reset_data(); return
+    if kind=="reset":reset_data();return
     c=st.session_state["scenario_cfg"].copy()
-    if kind=="supply80":
-        c["wgg_input"]=float(model["wgg"])*.8; c["wip_input"]=float(model["wip_stsk"])*.8
-    elif kind=="po120": c["po_input"]=(model["po"].astype(float)*1.2).tolist()
-    elif kind=="full": c["min_fill"]=float(model["container"])
+    if kind=="supply80":c["wgg_input"]=float(model["wgg"])*.8;c["wip_input"]=float(model["wip_stsk"])*.8
+    elif kind=="po120":c["po_input"]=(model["po"].astype(float)*1.2).tolist()
+    elif kind=="full":c["min_fill"]=float(model["container"])
+    elif kind=="energy10":c["energy_active"]=True;c["energy_target"]=.10
     st.session_state["scenario_cfg"]=c
 
+
+with st.sidebar:
+    st.markdown('<div class="aruna-logo-box">',unsafe_allow_html=True);st.image(str(LOGO_PATH),width=132);st.markdown('</div>',unsafe_allow_html=True)
+    st.markdown('<div class="side-title">Allocation Control Tower</div>',unsafe_allow_html=True)
+    st.markdown('<div class="side-sub">Strategi alokasi raw material → SKU</div>',unsafe_allow_html=True)
+    with st.expander("Database",expanded=False): uploaded=st.file_uploader("Upload Excel Aruna terbaru",type=["xlsx"])
+
+model,source_name=get_model(uploaded)
+PAGES=["Overview","Alokasi SKU","Simulasi","Dampak","Data & Asumsi"]
+source_key=f"{source_name}|{model['po_number']}|{model['wgg']}|{model['wip_stsk']}"
+if st.session_state.get("_source_key")!=source_key:
+    st.session_state["_source_key"]=source_key
+    st.session_state["scenario_cfg"]={"objective":"Balanced — Excess Min","use_stock":True,"retention":.95,"min_fill":0.0,"energy_target":0.0,"energy_active":False,"contract_min":[0.0]*len(SKUS),"wgg_input":float(model["wgg"]),"wip_input":float(model["wip_stsk"]),"po_input":model["po"].astype(float).tolist(),"stock_input":model["stock"].astype(float).tolist()}
+    st.session_state["decision_log"]=[]
 cfg=st.session_state["scenario_cfg"].copy()
-p=prepare_problem(model,cfg)
-sol,err=solve(model,p,cfg)
-topbar(model,source_name)
-if err:
-    st.error(f"Skenario tidak feasible: {err}")
-    st.stop()
+if "nav_page" not in st.session_state:st.session_state["nav_page"]="Overview"
+if st.session_state.get("_pending_nav") in PAGES:st.session_state["nav_page"]=st.session_state.pop("_pending_nav")
+with st.sidebar:
+    page=st.radio("Menu",PAGES,key="nav_page")
+    st.markdown(f'<div class="scenario-box"><b>Skenario Aktif</b><div>{label_objective(cfg["objective"])}<br>Retention {cfg["retention"]:.0%}<br>PO #{model["po_number"]}</div></div>',unsafe_allow_html=True)
+    st.caption("Input utama berada di menu Simulasi.")
 
-# ============================================================
-# PAGE 1 — PUSAT KENDALI
-# ============================================================
-if page=="Pusat Kendali":
-    section_header("Ringkasan Shipment", "Kondisi apa yang perlu diperhatikan sebelum keputusan produksi?")
-    a,b,c,d=st.columns(4)
-    with a: v4_card("Whole Fish Tersedia",fmt_kg(cfg["wgg_input"]),"Input aktif dari planning cycle")
-    with b: v4_card("PO Buyer",fmt_kg(sum(cfg["po_input"])),f"{sum(np.array(cfg['po_input'])>0)} SKU aktif")
-    with c: v4_card("Stok FG",fmt_kg(sum(cfg["stock_input"])),"Diprioritaskan sebelum produksi ulang")
-    with d: v4_card("WIP + Excess",fmt_kg(model["current_wip_excess"]),"Proxy modal yang masih tertahan",orange=True)
+p=prepare_problem(model,cfg);sol,err=solve(model,p,cfg)
+if err:st.error(f"Skenario tidak feasible: {err}");st.stop()
 
-    st.markdown('''<div class="v4-flow"><div class="v4-panel-title">Bagaimana DSS membantu planner?</div>
-    <div class="v4-panel-sub">Tidak perlu membaca seluruh model Excel. Planner cukup mengikuti 5 langkah ini.</div>
-    <div class="v4-flow-grid">
-    <div class="v4-step"><span class="v4-num">1</span>Input resource, PO & stok aktual</div>
-    <div class="v4-step"><span class="v4-num">2</span>Pilih prioritas keputusan</div>
-    <div class="v4-step"><span class="v4-num">3</span>Klik Hitung Rekomendasi</div>
-    <div class="v4-step"><span class="v4-num">4</span>Review mix, sisa & energi</div>
-    <div class="v4-step"><span class="v4-num">5</span>Setujui atau ubah skenario</div>
-    </div></div>''',unsafe_allow_html=True)
-    x,y,z=st.columns([1.3,1,1])
-    with x: st.button("Mulai Simulasi & Input Data →",on_click=goto,args=("Studio Keputusan",),type="primary",use_container_width=True)
-    with y: st.button("Lihat Rencana Produksi",on_click=goto,args=("Rencana Produksi",),use_container_width=True)
-    with z: st.button("Bandingkan Skenario",on_click=goto,args=("Dampak Keputusan",),use_container_width=True)
+h1,h2=st.columns([1.1,8.9],vertical_alignment="center")
+with h1:st.image(str(LOGO_PATH),width=138)
+with h2:
+    st.markdown(f'''<div class="topbar"><div class="top-kicker">ARUNA — PRODUCTION DECISION SUPPORT SYSTEM</div><div class="top-title">Raw Material Allocation Control Tower</div><div class="top-sub">Menentukan bahan baku mana yang dialokasikan ke SKU mana berdasarkan resource aktual, PO, stok, yield, nilai ekonomi, excess, dan energi.</div><span class="pill">Database Excel Terhubung</span><span class="pill">PO #{model['po_number']}</span><span class="pill orange">Shipment {fmt_date(model['shipment_date'])}</span></div>''',unsafe_allow_html=True)
 
-    section_header("Sinyal Operasional", "Apa yang dibaca DSS dari data Aruna saat ini?")
-    l,m,r=st.columns([1.05,1.05,.9])
-    with l:
-        st.markdown('<div class="v4-panel"><div class="v4-panel-title">Komposisi Resource</div><div class="v4-panel-sub">Supply YFT berdasarkan size dan grade.</div>',unsafe_allow_html=True)
-        mix=model["raw_df"].groupby(["Size","Grade"],as_index=False)["YFT kg"].sum(); mix["Resource"]=mix["Size"]+" • "+mix["Grade"]
-        fig=px.treemap(mix,path=["Resource"],values="YFT kg",color="YFT kg",color_continuous_scale=["#E5F4F8",TEAL]); fig.update_coloraxes(showscale=False)
-        st.plotly_chart(plot_layout(fig,330),use_container_width=True,config=PLOT_CONFIG); st.markdown('</div>',unsafe_allow_html=True)
-    with m:
-        st.markdown('<div class="v4-panel"><div class="v4-panel-title">PO vs Stok FG</div><div class="v4-panel-sub">SKU yang sudah memiliki stock sebelum produksi baru.</div>',unsafe_allow_html=True)
-        dem=pd.DataFrame({"SKU":SKUS,"PO":p["po"],"Stok FG":np.array(cfg["stock_input"],dtype=float)}); dem=dem[dem["PO"]>0].melt("SKU",value_vars=["PO","Stok FG"],var_name="Seri",value_name="kg")
-        fig=px.bar(dem,x="kg",y="SKU",color="Seri",orientation="h",barmode="group",color_discrete_map={"PO":NAVY_2,"Stok FG":AMBER}); fig.update_layout(xaxis_title="kg FG",yaxis_title="")
-        st.plotly_chart(plot_layout(fig,330),use_container_width=True,config=PLOT_CONFIG); st.markdown('</div>',unsafe_allow_html=True)
-    with r:
-        cover=sum(cfg["stock_input"])/sum(cfg["po_input"]) if sum(cfg["po_input"]) else 0
-        signal("Inventory lock perlu ditangani",f"{fmt_kg(model['current_wip_excess'])} masih terlihat sebagai WIP/excess pada snapshot case.","warn")
-        signal("Gunakan stok sebelum produksi ulang",f"Stok FG setara {fmt_pct(cover)} dari total PO aktif.","good")
-        signal("Supply tidak selalu cocok dengan PO","Planning perlu dimulai dari resource aktual karena bahan baku bersifat wild catch.")
-
-    section_header("Rekomendasi Aktif","Ringkasan hasil skenario yang dipilih")
-    a,b,c,d=st.columns(4)
-    with a: v4_card("Prioritas",label_objective(sol.objective_name),"Dapat diubah di Studio Keputusan",orange=True,text=True)
-    with b: v4_card("Shipment Disarankan",fmt_kg(sol.shipment_total),f"{fmt_pct(sol.container_fill)} kapasitas kontainer")
-    with c: v4_card("Sisa Resource",fmt_kg(sol.residual_by_resource.sum()),"Belum memperoleh rute")
-    with d: v4_card("Intensitas Energi",f"{sol.energy_intensity:.3f} kWh/kg",f"Historis {model['historical_intensity']:.3f}")
-
-# ============================================================
-# PAGE 2 — STUDIO KEPUTUSAN
-# ============================================================
-elif page=="Studio Keputusan":
-    section_header("Area Input Utama","Masukkan kondisi aktual lalu klik Hitung Rekomendasi Produksi")
-    st.markdown('<div class="callout"><b>Angka awal otomatis berasal dari Excel Aruna.</b> Semua perubahan di halaman ini hanya menjadi skenario DSS dan tidak mengubah workbook sumber.</div>',unsafe_allow_html=True)
-    st.markdown("##### Skenario cepat")
-    q1,q2,q3,q4=st.columns(4)
-    with q1: st.button("Reset: Data Aruna",on_click=preset,args=("reset",),use_container_width=True)
-    with q2: st.button("Supply Turun 20%",on_click=preset,args=("supply80",),use_container_width=True)
-    with q3: st.button("PO Naik 20%",on_click=preset,args=("po120",),use_container_width=True)
-    with q4: st.button("Wajib Full Container",on_click=preset,args=("full",),use_container_width=True)
-
-    left,right=st.columns([1.35,.85])
+if page=="Overview":
+    section_header("Ringkasan","Kondisi utama sebelum strategi alokasi dipilih")
+    cols=st.columns(5);data=[("Whole Fish",fmt_kg(cfg["wgg_input"]),"Resource shipment",False),("WIP ST/SK",fmt_kg(cfg["wip_input"]),"Carry-in",False),("PO Buyer",fmt_kg(sum(cfg["po_input"])),f"{sum(np.array(cfg['po_input'])>0)} SKU aktif",False),("Stok FG",fmt_kg(sum(cfg["stock_input"])),"Dipakai sebelum produksi ulang",False),("WIP + Excess",fmt_kg(model["current_wip_excess"]),"Proxy modal tertahan",True)]
+    for col,(lab,val,note,org) in zip(cols,data):
+        with col:kpi(lab,val,note,org)
+    left,mid,right=st.columns([1.05,1.2,.85])
     with left:
-        with st.form("decision_form"):
-            st.markdown("### 1 — Resource aktual")
-            c1,c2=st.columns(2)
-            with c1: wgg=st.number_input("Whole fish tersedia (kg)",min_value=0.0,value=float(cfg["wgg_input"]),step=500.0)
-            with c2: wip=st.number_input("WIP ST/SK tersedia (kg loin)",min_value=0.0,value=float(cfg["wip_input"]),step=250.0)
-            use_stock=st.toggle("Gunakan stok FG sebelum produksi baru",value=cfg["use_stock"])
-            st.markdown("### 2 — PO & stok per SKU")
-            inp=pd.DataFrame({"SKU":SKUS,"PO Buyer (kg)":np.array(cfg["po_input"],dtype=float),"Stok FG (kg)":np.array(cfg["stock_input"],dtype=float),"Minimum Kontrak (kg)":np.array(cfg["contract_min"],dtype=float)})
-            edited=st.data_editor(inp,hide_index=True,use_container_width=True,disabled=["SKU"],column_config={
-                "PO Buyer (kg)":st.column_config.NumberColumn(min_value=0.0,step=50.0),
-                "Stok FG (kg)":st.column_config.NumberColumn(min_value=0.0,step=50.0),
-                "Minimum Kontrak (kg)":st.column_config.NumberColumn(min_value=0.0,step=50.0,help="Isi hanya jika buyer memang memiliki minimum commitment.")})
-            st.markdown("### 3 — Prioritas management")
-            opts=["Profit Max","Balanced — Excess Min","Energy Efficient"]
-            obj=st.radio("Prioritas",opts,index=opts.index(cfg["objective"]),format_func=label_objective,horizontal=True,label_visibility="collapsed")
-            retention=st.slider("Nilai ekonomi minimum yang dipertahankan",80,100,int(round(cfg["retention"]*100)),1,format="%d%%")/100
-            minfill=st.slider("Minimum isi shipment (kg FG)",0,int(model["container"]),int(cfg["min_fill"]),500)
-            eactive=st.toggle("Aktifkan target intensitas energi",value=cfg["energy_active"])
-            etarget=st.slider("Target penurunan intensitas energi",0,25,int(round(cfg["energy_target"]*100)),1,format="%d%%",disabled=not eactive)/100
-            run=st.form_submit_button("HITUNG REKOMENDASI PRODUKSI",type="primary",use_container_width=True)
-        if run:
-            cfg.update({"objective":obj,"use_stock":use_stock,"retention":retention,"min_fill":float(minfill),"energy_active":eactive,"energy_target":etarget,
-                        "wgg_input":float(wgg),"wip_input":float(wip),"po_input":edited["PO Buyer (kg)"].astype(float).tolist(),
-                        "stock_input":edited["Stok FG (kg)"].astype(float).tolist(),"contract_min":edited["Minimum Kontrak (kg)"].astype(float).tolist()})
-            st.session_state["scenario_cfg"]=cfg; st.rerun()
+        st.markdown('<div class="dashboard-panel"><div class="panel-head">Komposisi Raw Material</div><div class="panel-sub2">Size–grade supply dari ledger Aruna</div>',unsafe_allow_html=True)
+        mix=model["raw_df"].groupby(["Size","Grade"],as_index=False)["YFT kg"].sum();mix["Resource"]=mix["Size"]+" • "+mix["Grade"]
+        fig=px.treemap(mix,path=["Resource"],values="YFT kg",color="YFT kg",color_continuous_scale=["#DFF2F7",TEAL]);fig.update_coloraxes(showscale=False);st.plotly_chart(plot_layout(fig,335),use_container_width=True,config=PLOT_CONFIG);st.markdown('</div>',unsafe_allow_html=True)
+    with mid:
+        st.markdown('<div class="dashboard-panel"><div class="panel-head">PO vs Existing Stock</div><div class="panel-sub2">Kebutuhan yang benar-benar perlu diproduksi</div>',unsafe_allow_html=True)
+        dem=pd.DataFrame({"SKU":SKUS,"PO":p["po"],"Stok FG":np.array(cfg["stock_input"],dtype=float)});dem=dem[dem["PO"]>0].melt("SKU",value_vars=["PO","Stok FG"],var_name="Seri",value_name="kg")
+        fig=px.bar(dem,x="kg",y="SKU",color="Seri",orientation="h",barmode="group",color_discrete_map={"PO":NAVY_2,"Stok FG":AMBER});fig.update_layout(xaxis_title="kg FG",yaxis_title="");st.plotly_chart(plot_layout(fig,335),use_container_width=True,config=PLOT_CONFIG);st.markdown('</div>',unsafe_allow_html=True)
     with right:
-        st.markdown('<div class="v4-panel"><div class="v4-panel-title">Cara memilih prioritas</div><div class="v4-panel-sub">Pilih berdasarkan pertanyaan bisnis yang sedang dihadapi.</div>',unsafe_allow_html=True)
-        signal("Nilai Ekonomi Maksimum","Cari economic ceiling dari resource yang tersedia.")
-        signal("Seimbang — Kurangi Excess","Pertahankan mayoritas nilai sambil menekan resource yang mengendap.","warn")
-        signal("Efisiensi Energi","Cari mix lebih hemat energi dengan economics tetap dijaga.","good")
+        st.markdown('<div class="dashboard-panel"><div class="panel-head">Decision Signal</div><div class="panel-sub2">Apa yang perlu ditindaklanjuti?</div>',unsafe_allow_html=True)
+        for t,b in explain(model,p,sol):signal(t,b,"warn" if "sisa" in t.lower() else "good")
         st.markdown('</div>',unsafe_allow_html=True)
-        st.markdown("<br>",unsafe_allow_html=True)
-        v4_card("Prioritas Aktif",label_objective(sol.objective_name),"Hasil berdasarkan input aktif",orange=True,text=True)
-        st.markdown("<br>",unsafe_allow_html=True)
-        v4_card("Shipment",fmt_kg(sol.shipment_total),f"{fmt_pct(sol.container_fill)} kapasitas")
-        st.markdown("<br>",unsafe_allow_html=True)
-        v4_card("Sisa Resource",fmt_kg(sol.residual_by_resource.sum()),"Potential WIP / route berikutnya")
-
-    section_header("Preview Rekomendasi","Output inti sebelum membuka rencana lengkap")
-    preview=plan_df(model,p,sol)[["SKU","PO (kg)","Stok FG Terpakai (kg)","Rekomendasi Produksi Baru (kg)","Shipment (kg)"]]
-    st.dataframe(preview.style.format({"PO (kg)":"{:,.1f}","Stok FG Terpakai (kg)":"{:,.1f}","Rekomendasi Produksi Baru (kg)":"{:,.1f}","Shipment (kg)":"{:,.1f}"}),use_container_width=True,hide_index=True)
-    a,b=st.columns(2)
-    with a: st.button("Lihat Rencana Produksi Lengkap →",on_click=goto,args=("Rencana Produksi",),type="primary",use_container_width=True)
-    with b: st.button("Bandingkan Dampak Skenario",on_click=goto,args=("Dampak Keputusan",),use_container_width=True)
-
-# ============================================================
-# PAGE 3 — RENCANA PRODUKSI
-# ============================================================
-elif page=="Rencana Produksi":
-    section_header("Output Planner","Apa yang sebaiknya diproduksi pada skenario terpilih?")
+    section_header("Skenario Aktif","Ringkasan rekomendasi saat ini")
     a,b,c,d=st.columns(4)
-    with a: v4_card("Prioritas",label_objective(sol.objective_name),"Skenario aktif",orange=True,text=True)
-    with b: v4_card("Shipment",fmt_kg(sol.shipment_total),f"{fmt_pct(sol.container_fill)} kapasitas")
-    with c: v4_card("Produksi Baru",fmt_kg(sol.new_fg.sum()),"Di luar existing FG")
-    with d: v4_card("Sisa Resource",fmt_kg(sol.residual_by_resource.sum()),"Belum memperoleh rute")
+    with a:kpi("Prioritas",label_objective(sol.objective_name),"Ubah di menu Simulasi",True,True)
+    with b:kpi("Shipment",fmt_kg(sol.shipment_total),f"{fmt_pct(sol.container_fill)} kapasitas")
+    with c:kpi("Sisa Resource",fmt_kg(sol.residual_by_resource.sum()),"Belum memperoleh rute")
+    with d:kpi("Intensitas Energi",f"{sol.energy_intensity:.3f} kWh/kg",f"Historis {model['historical_intensity']:.3f}")
+    x,y,z=st.columns([1.2,1,1])
+    with x:st.button("ATUR INPUT & HITUNG →",on_click=goto,args=("Simulasi",),type="primary",use_container_width=True)
+    with y:st.button("Lihat Strategi Alokasi",on_click=goto,args=("Alokasi SKU",),use_container_width=True)
+    with z:st.button("Bandingkan Dampak",on_click=goto,args=("Dampak",),use_container_width=True)
 
-    section_header("Rencana per SKU","Tabel utama dibuat sederhana agar langsung actionable")
-    full=plan_df(model,p,sol)
-    simple=full[["SKU","PO (kg)","Stok FG Terpakai (kg)","Rekomendasi Produksi Baru (kg)","Shipment (kg)","Pemenuhan PO"]]
-    st.dataframe(simple.style.format({"PO (kg)":"{:,.1f}","Stok FG Terpakai (kg)":"{:,.1f}","Rekomendasi Produksi Baru (kg)":"{:,.1f}","Shipment (kg)":"{:,.1f}","Pemenuhan PO":"{:.1%}"}),use_container_width=True,hide_index=True)
-    with st.expander("Lihat detail perhitungan energi & nilai routing"):
-        det=full[["SKU","Energi (kWh)","Intensitas Energi (kWh/kg)","Nilai Routing/kg Loin"]]
-        st.dataframe(det.style.format({"Energi (kWh)":"{:,.1f}","Intensitas Energi (kWh/kg)":"{:.3f}","Nilai Routing/kg Loin":"{:,.0f}"}),use_container_width=True,hide_index=True)
-    l,r=st.columns([1.2,1])
+elif page=="Alokasi SKU":
+    section_header("Strategi Alokasi","Raw material mana diarahkan ke SKU mana?")
+    a,b,c,d=st.columns(4)
+    with a:kpi("Produksi Baru",fmt_kg(sol.new_fg.sum()),"Hasil optimizer")
+    with b:kpi("Stok FG Dipakai",fmt_kg(sol.stock_used.sum()),"Mengurangi produksi ulang")
+    with c:kpi("Shipment",fmt_kg(sol.shipment_total),f"{fmt_pct(sol.container_fill)} kapasitas")
+    with d:kpi("Residual",fmt_kg(sol.residual_by_resource.sum()),"Potential WIP / route lain",True)
+    l,r=st.columns([1.4,.8])
     with l:
-        st.markdown('<div class="v4-panel"><div class="v4-panel-title">Routing Resource → SKU</div><div class="v4-panel-sub">Menunjukkan dari resource mana setiap produk direkomendasikan dibuat.</div>',unsafe_allow_html=True)
-        st.plotly_chart(sankey(sol),use_container_width=True,config=PLOT_CONFIG); st.markdown('</div>',unsafe_allow_html=True)
+        st.markdown('<div class="dashboard-panel"><div class="panel-head">Peta Resource → SKU</div><div class="panel-sub2">Semakin tebal aliran, semakin besar kg loin yang dialokasikan.</div>',unsafe_allow_html=True);st.plotly_chart(sankey(sol),use_container_width=True,config=PLOT_CONFIG);st.markdown('</div>',unsafe_allow_html=True)
     with r:
-        section_header("Alasan Rekomendasi","Kenapa DSS memilih mix ini?")
-        for num,tit,body in explain(model,p,sol):
-            st.markdown(f'<div class="signal"><span class="badge badge-derived">{num}</span><div class="signal-title">{tit}</div><div class="signal-body">{body}</div></div>',unsafe_allow_html=True)
-    section_header("Keputusan Planner","Setujui, ubah, atau ekspor hasil")
-    a,b,c=st.columns([1.15,1,1])
-    with a:
-        if st.button("SETUJUI RENCANA PRODUKSI",type="primary",use_container_width=True):
-            st.session_state.setdefault("decision_log",[]).append({"Waktu":datetime.now().strftime("%d-%m-%Y %H:%M:%S"),"Prioritas":label_objective(sol.objective_name),"Shipment (kg)":round(sol.shipment_total,2),"Sisa Resource (kg)":round(sol.residual_by_resource.sum(),2),"Intensitas Energi":round(sol.energy_intensity,4)})
-            st.success("Rencana masuk ke Decision Log prototype.")
-    with b: st.button("Ubah Input / Skenario",on_click=goto,args=("Studio Keputusan",),use_container_width=True)
-    with c: st.download_button("Download Rencana Excel",recommendation_excel(model,p,sol,cfg),"Aruna_DSS_Rencana_Produksi.xlsx","application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",use_container_width=True)
-    if st.session_state.get("decision_log"):
-        with st.expander("Decision Log"): st.dataframe(pd.DataFrame(st.session_state["decision_log"]),use_container_width=True,hide_index=True)
+        st.markdown('<div class="dashboard-panel"><div class="panel-head">Aksi yang Disarankan</div><div class="panel-sub2">Alasan rekomendasi agar model tidak menjadi black box.</div>',unsafe_allow_html=True)
+        for t,b in explain(model,p,sol):signal(t,b,"warn" if "sisa" in t.lower() else "good")
+        st.markdown('</div>',unsafe_allow_html=True)
+    section_header("Rencana Produksi SKU","Berapa kg yang sebaiknya dibuat?")
+    full=plan_df(model,p,sol);simple=full[["SKU","PO (kg)","Stok FG Terpakai (kg)","Rekomendasi Produksi Baru (kg)","Shipment (kg)","Pemenuhan PO"]]
+    st.dataframe(simple.style.format({"PO (kg)":"{:,.1f}","Stok FG Terpakai (kg)":"{:,.1f}","Rekomendasi Produksi Baru (kg)":"{:,.1f}","Shipment (kg)":"{:,.1f}","Pemenuhan PO":"{:.1%}"}),hide_index=True,use_container_width=True)
+    with st.expander("Lihat matriks alokasi kg loin"):st.dataframe(allocation_df(sol).style.format("{:,.1f}"),use_container_width=True)
+    aa,bb,cc=st.columns([1.15,1,1])
+    with aa:
+        if st.button("SETUJUI RENCANA ALOKASI",type="primary",use_container_width=True):
+            st.session_state.setdefault("decision_log",[]).append({"Waktu":datetime.now().strftime("%d-%m-%Y %H:%M:%S"),"Prioritas":label_objective(sol.objective_name),"Shipment (kg)":round(sol.shipment_total,2),"Sisa Resource (kg)":round(sol.residual_by_resource.sum(),2)});st.success("Rencana alokasi masuk ke Decision Log.")
+    with bb:st.button("Ubah Skenario",on_click=goto,args=("Simulasi",),use_container_width=True)
+    with cc:st.download_button("Download Rencana Excel",recommendation_excel(model,p,sol,cfg),"Aruna_DSS_Allocation_Plan.xlsx","application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",use_container_width=True)
 
-# ============================================================
-# PAGE 4 — DAMPAK KEPUTUSAN
-# ============================================================
-elif page=="Dampak Keputusan":
-    section_header("Bandingkan Skenario","Management dapat memilih trade-off sesuai prioritas bisnis")
+elif page=="Simulasi":
+    section_header("Simulation & Decision Input","Ubah kondisi aktual lalu hitung strategi alokasi")
+    st.info("✏️ Halaman ini adalah area INPUT. Whole Fish, WIP, PO, stok, minimum kontrak, prioritas, shipment, dan target energi dapat diubah.")
+    q=st.columns(5)
+    for col,label,kind in zip(q,["Reset","Supply -20%","PO +20%","Full Container","Energi -10%"],["reset","supply80","po120","full","energy10"]):
+        with col:st.button(label,on_click=preset,args=(kind,),use_container_width=True)
+    l,r=st.columns([1.45,.75])
+    with l:
+        with st.form("sim_form"):
+            st.markdown("### 1. Resource aktual");c1,c2=st.columns(2)
+            with c1:wgg=st.number_input("Whole Fish tersedia (kg)",min_value=0.0,value=float(cfg["wgg_input"]),step=500.0)
+            with c2:wip=st.number_input("WIP ST/SK tersedia (kg loin)",min_value=0.0,value=float(cfg["wip_input"]),step=250.0)
+            use_stock=st.toggle("Gunakan stok FG terlebih dahulu",value=cfg["use_stock"])
+            st.markdown("### 2. PO & stok per SKU")
+            inp=pd.DataFrame({"SKU":SKUS,"PO Buyer (kg)":np.array(cfg["po_input"],dtype=float),"Stok FG (kg)":np.array(cfg["stock_input"],dtype=float),"Minimum Kontrak (kg)":np.array(cfg["contract_min"],dtype=float)})
+            edited=st.data_editor(inp,hide_index=True,use_container_width=True,disabled=["SKU"],column_config={"PO Buyer (kg)":st.column_config.NumberColumn(min_value=0.0,step=50.0),"Stok FG (kg)":st.column_config.NumberColumn(min_value=0.0,step=50.0),"Minimum Kontrak (kg)":st.column_config.NumberColumn(min_value=0.0,step=50.0)})
+            st.markdown("### 3. Prioritas keputusan");opts=["Profit Max","Balanced — Excess Min","Energy Efficient"]
+            obj=st.radio("Prioritas",opts,index=opts.index(cfg["objective"]),format_func=label_objective,horizontal=True)
+            retention=st.slider("Nilai ekonomi yang dipertahankan",80,100,int(round(cfg["retention"]*100)),1,format="%d%%")/100
+            min_fill=st.slider("Minimum shipment (kg FG)",0,int(model["container"]),int(cfg["min_fill"]),500)
+            energy_active=st.toggle("Aktifkan batas intensitas energi",value=cfg["energy_active"])
+            energy_target=st.slider("Target penurunan intensitas energi",0,25,int(round(cfg["energy_target"]*100)),1,format="%d%%",disabled=not energy_active)/100
+            run=st.form_submit_button("HITUNG STRATEGI ALOKASI",type="primary",use_container_width=True)
+        if run:
+            cfg.update({"objective":obj,"use_stock":use_stock,"retention":retention,"min_fill":float(min_fill),"energy_active":energy_active,"energy_target":energy_target,"wgg_input":float(wgg),"wip_input":float(wip),"po_input":edited["PO Buyer (kg)"].astype(float).tolist(),"stock_input":edited["Stok FG (kg)"].astype(float).tolist(),"contract_min":edited["Minimum Kontrak (kg)"].astype(float).tolist()});st.session_state["scenario_cfg"]=cfg;st.rerun()
+    with r:
+        st.markdown('<div class="dashboard-panel"><div class="panel-head">Preview Hasil</div><div class="panel-sub2">Output dari skenario aktif.</div>',unsafe_allow_html=True);kpi("Prioritas",label_objective(sol.objective_name),"Objective aktif",True,True);st.markdown('<br>',unsafe_allow_html=True);kpi("Shipment",fmt_kg(sol.shipment_total),f"{fmt_pct(sol.container_fill)} kapasitas");st.markdown('<br>',unsafe_allow_html=True);kpi("Sisa Resource",fmt_kg(sol.residual_by_resource.sum()),"Potential WIP / excess");st.markdown('</div>',unsafe_allow_html=True)
+    st.button("LIHAT HASIL ALOKASI →",on_click=goto,args=("Alokasi SKU",),type="primary",use_container_width=True)
+
+elif page=="Dampak":
+    section_header("Decision Impact","Bandingkan strategi sebelum management memilih")
     rows=[]
     for obj in ["Profit Max","Balanced — Excess Min","Energy Efficient"]:
-        cc=cfg.copy(); cc["objective"]=obj; pp=prepare_problem(model,cc); ss,ee=solve(model,pp,cc)
-        if ss: rows.append({"key":obj,"Skenario":label_objective(obj),"Nilai":ss.routing_value,"Sisa":ss.residual_by_resource.sum(),"Intensitas":ss.energy_intensity,"Shipment":ss.shipment_total})
+        cc=cfg.copy();cc["objective"]=obj;pp=prepare_problem(model,cc);ss,ee=solve(model,pp,cc)
+        if ss:rows.append({"key":obj,"Skenario":label_objective(obj),"Nilai":ss.routing_value,"Sisa":ss.residual_by_resource.sum(),"Intensitas":ss.energy_intensity,"Shipment":ss.shipment_total})
     cols=st.columns(3)
     for col,row in zip(cols,rows):
         active=row["key"]==cfg["objective"]
         with col:
-            st.markdown(f'<div class="v4-choice {"active" if active else ""}"><div class="v4-choice-title">{row["Skenario"]}</div><div class="v4-choice-value">{fmt_rp(row["Nilai"])}</div><div class="v4-choice-note">Sisa: <b>{fmt_kg(row["Sisa"])}</b><br>Intensitas: <b>{row["Intensitas"]:.3f} kWh/kg</b><br>Shipment: <b>{fmt_kg(row["Shipment"])}</b></div></div>',unsafe_allow_html=True)
-            st.button("Skenario Aktif" if active else "Gunakan Skenario Ini",key=f'use_{row["key"]}',disabled=active,on_click=set_obj,args=(row["key"],),use_container_width=True)
-    section_header("Trade-off Nilai vs Excess","Berapa sisa resource jika economic value yang dipertahankan berubah?")
+            st.markdown(f'<div class="scenario-card-v5 {"active" if active else ""}"><div class="sc-title">{row["Skenario"]}</div><div class="sc-value">{fmt_rp(row["Nilai"])}</div><div class="sc-note">Sisa: <b>{fmt_kg(row["Sisa"])}</b><br>Intensitas: <b>{row["Intensitas"]:.3f} kWh/kg</b><br>Shipment: <b>{fmt_kg(row["Shipment"])}</b></div></div>',unsafe_allow_html=True)
+            st.button("Skenario Aktif" if active else "Gunakan Skenario",disabled=active,on_click=set_obj,args=(row["key"],),key=f'sc_{row["key"]}',use_container_width=True)
     frontier=[]
     for ret in [1,.99,.98,.97,.95,.92,.90]:
-        cc=cfg.copy(); cc["objective"]="Balanced — Excess Min"; cc["retention"]=ret; pp=prepare_problem(model,cc); ss,ee=solve(model,pp,cc)
-        if ss: frontier.append({"Retention":ret,"Sisa (kg)":ss.residual_by_resource.sum(),"Nilai":ss.routing_value})
-    fdf=pd.DataFrame(frontier)
-    l,r=st.columns(2)
+        cc=cfg.copy();cc["objective"]="Balanced — Excess Min";cc["retention"]=ret;pp=prepare_problem(model,cc);ss,ee=solve(model,pp,cc)
+        if ss:frontier.append({"Retention":ret,"Sisa Resource":ss.residual_by_resource.sum(),"Nilai":ss.routing_value})
+    fdf=pd.DataFrame(frontier);l,r=st.columns(2)
     with l:
-        fig=px.line(fdf,x="Retention",y="Sisa (kg)",markers=True,color_discrete_sequence=[AMBER]); fig.update_xaxes(tickformat=".0%"); fig.update_layout(xaxis_title="Nilai ekonomi dipertahankan",yaxis_title="Sisa loin (kg)")
-        st.plotly_chart(plot_layout(fig,380),use_container_width=True,config=PLOT_CONFIG)
+        fig=px.line(fdf,x="Retention",y="Sisa Resource",markers=True,color_discrete_sequence=[AMBER]);fig.update_xaxes(tickformat=".0%");fig.update_layout(xaxis_title="Nilai ekonomi dipertahankan",yaxis_title="Sisa loin (kg)");st.plotly_chart(plot_layout(fig,380),use_container_width=True,config=PLOT_CONFIG)
     with r:
-        sdf=pd.DataFrame(rows); fig=px.scatter(sdf,x="Intensitas",y="Nilai",size="Shipment",text="Skenario",color="Sisa",color_continuous_scale=["#DCEFF4",AMBER]); fig.update_traces(textposition="top center"); fig.update_layout(xaxis_title="kWh/kg FG",yaxis_title="Nilai kontribusi routing (Rp)")
-        st.plotly_chart(plot_layout(fig,380),use_container_width=True,config=PLOT_CONFIG)
-    st.markdown('<div class="warnbox"><b>Catatan:</b> Nilai Kontribusi Routing adalah decision metric optimizer, bukan GP akuntansi (PC3). Full shipment P&L tetap berada di model Excel.</div>',unsafe_allow_html=True)
+        sdf=pd.DataFrame(rows);fig=px.scatter(sdf,x="Intensitas",y="Nilai",size="Shipment",text="Skenario",color="Sisa",color_continuous_scale=["#DFF2F7",AMBER]);fig.update_traces(textposition="top center");st.plotly_chart(plot_layout(fig,380),use_container_width=True,config=PLOT_CONFIG)
+    st.warning("Nilai Routing adalah decision metric untuk membandingkan alternatif alokasi, bukan GP akuntansi PC3.")
 
-# ============================================================
-# PAGE 5 — DATA & MODEL
-# ============================================================
 else:
-    section_header("Transparansi Data","Dari mana angka DSS berasal dan mana yang masih perlu divalidasi?")
-    st.markdown(f'<div class="goodbox"><b>Database aktif: {source_name}</b><br>Simulasi user tidak mengubah file sumber.</div>',unsafe_allow_html=True)
-    cat=model["data_catalog"].rename(columns={"Source Sheet":"Sheet Sumber","Decision Use":"Digunakan Untuk","Records":"Jumlah Data","Coverage":"Cakupan","Status":"Status Data"})
-    st.dataframe(cat,use_container_width=True,hide_index=True)
+    section_header("Data & Asumsi","Sumber angka dan parameter yang masih perlu divalidasi")
+    st.success(f"Database aktif: {source_name}. Simulasi tidak mengubah workbook sumber.")
+    cat=model["data_catalog"].rename(columns={"Source Sheet":"Sheet","Decision Use":"Fungsi","Records":"Jumlah Data","Coverage":"Cakupan","Status":"Status"});st.dataframe(cat,hide_index=True,use_container_width=True)
     a,b,c,d=st.columns(4)
-    with a: v4_card("Raw Material",f"{len(model['raw_df'])} baris",f"{fmt_date(model['raw_start'])}–{fmt_date(model['raw_end'])}")
-    with b: v4_card("Processing",f"{len(model['proc_df'])} batch","Sumber measured yield")
-    with c: v4_card("SKU Harga",f"{len(model['price_df'])} SKU","Price sheet")
-    with d: v4_card("Yield Whole→Loin",fmt_pct(model["whole_to_loin_yield"]),"Derived dari batch aktual")
+    with a:kpi("Raw Material",f"{len(model['raw_df'])} baris",f"{fmt_date(model['raw_start'])}–{fmt_date(model['raw_end'])}")
+    with b:kpi("Processing",f"{len(model['proc_df'])} batch","Sumber yield")
+    with c:kpi("Whole→Loin Yield",fmt_pct(model["whole_to_loin_yield"]),"Derived dari batch aktual")
+    with d:kpi("SKU Harga",f"{len(model['price_df'])} SKU","Price sheet")
     l,r=st.columns(2)
     with l:
-        tmp=model["proc_df"].copy(); fig=px.line(tmp,x="Date",y="Yield",markers=True,color_discrete_sequence=[TEAL]); fig.update_yaxes(tickformat=".0%"); fig.update_layout(xaxis_title="Tanggal",yaxis_title="Yield")
-        st.plotly_chart(plot_layout(fig,360),use_container_width=True,config=PLOT_CONFIG)
+        tmp=model["proc_df"].copy();fig=px.line(tmp,x="Date",y="Yield",markers=True,color_discrete_sequence=[TEAL]);fig.update_yaxes(tickformat=".0%");st.plotly_chart(plot_layout(fig,360),use_container_width=True,config=PLOT_CONFIG)
     with r:
-        signal("Recovery loin → SKU","Sebagian masih menggunakan benchmark/model coefficient dan perlu actual recovery Aruna.","warn")
-        signal("Eligibility kualitas","Mapping Size–Grade ke AAA/AA dan buyer specification perlu dikonfirmasi.","warn")
-        signal("Energi per SKU","Masih process-based estimate, belum plant-metered kWh/kg.","warn")
+        signal("Recovery loin → SKU","Sebagian masih benchmark/model coefficient dan perlu actual recovery Aruna.","warn");signal("Eligibility kualitas","Mapping Size–Grade ke AAA/AA / buyer specification perlu divalidasi.","warn");signal("Energi per SKU","Masih process-based estimate, belum plant-metered kWh/kg.","warn")
