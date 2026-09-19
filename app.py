@@ -172,16 +172,66 @@ def signal(title: str, body: str, kind=""):
 
 
 def plot_layout(fig, height=390):
+    # Force every Plotly text layer to a dark, readable color.
+    # This avoids Streamlit/browser theme overrides making SVG text white.
+    DARK = "#17384C"
+    GRID = "#8B9298"
     fig.update_layout(
+        template="plotly_white",
         height=height,
         paper_bgcolor="rgba(0,0,0,0)",
-        plot_bgcolor="rgba(0,0,0,0)",
-        margin=dict(l=15, r=15, t=45, b=15),
-        font=dict(color=INK, size=12),
-        title_font=dict(size=14, color=NAVY),
-        legend_title_text="",
-        title_text=None,
+        plot_bgcolor="rgba(255,255,255,0)",
+        margin=dict(l=70, r=70, t=48, b=58),
+        font=dict(family="Arial, sans-serif", color=DARK, size=12),
+        title_font=dict(family="Arial, sans-serif", size=14, color=DARK),
+        legend=dict(
+            title=dict(font=dict(color=DARK, size=11)),
+            font=dict(color=DARK, size=11),
+            bgcolor="rgba(255,255,255,0.75)",
+        ),
+        coloraxis_colorbar=dict(
+            title=dict(font=dict(color=DARK, size=11)),
+            tickfont=dict(color=DARK, size=10),
+        ),
+        uniformtext_minsize=10,
+        uniformtext_mode="hide",
     )
+    fig.update_xaxes(
+        showgrid=True,
+        gridcolor=GRID,
+        gridwidth=1,
+        zeroline=False,
+        tickfont=dict(family="Arial, sans-serif", color=DARK, size=11),
+        title_font=dict(family="Arial, sans-serif", color=DARK, size=12),
+        tickcolor=DARK,
+        linecolor=DARK,
+        showline=True,
+    )
+    fig.update_yaxes(
+        showgrid=True,
+        gridcolor=GRID,
+        gridwidth=1,
+        zeroline=False,
+        tickfont=dict(family="Arial, sans-serif", color=DARK, size=11),
+        title_font=dict(family="Arial, sans-serif", color=DARK, size=12),
+        tickcolor=DARK,
+        linecolor=DARK,
+        showline=True,
+    )
+
+    # Explicitly set text colors for traces and annotations where supported.
+    for trace in fig.data:
+        if hasattr(trace, "textfont"):
+            trace.textfont = dict(color=DARK, size=11)
+        if hasattr(trace, "insidetextfont"):
+            trace.insidetextfont = dict(color=DARK, size=11)
+        if hasattr(trace, "outsidetextfont"):
+            trace.outsidetextfont = dict(color=DARK, size=11)
+
+    if fig.layout.annotations:
+        for ann in fig.layout.annotations:
+            ann.font = dict(color=DARK, size=11)
+
     return fig
 
 
@@ -713,6 +763,14 @@ st.markdown(
         color: #17384C !important;
         background: #FFFFFF !important;
     }
+
+    /* Streamlit widgets on light backgrounds */
+    .stAlert, [data-testid="stAlert"] {
+        color: #17384C !important;
+    }
+    .stAlert p, [data-testid="stAlert"] p {
+        color: #17384C !important;
+    }
     </style>
     """,
     unsafe_allow_html=True,
@@ -890,7 +948,14 @@ elif page=="Dampak":
         fig=px.line(fdf,x="Retention",y="Sisa Resource",markers=True,color_discrete_sequence=[AMBER]);fig.update_xaxes(tickformat=".0%");fig.update_layout(xaxis_title="Nilai ekonomi dipertahankan",yaxis_title="Sisa loin (kg)");st.plotly_chart(plot_layout(fig,380),use_container_width=True,config=PLOT_CONFIG)
     with r:
         sdf=pd.DataFrame(rows);fig=px.scatter(sdf,x="Intensitas",y="Nilai",size="Shipment",text="Skenario",color="Sisa",color_continuous_scale=["#DFF2F7",AMBER]);fig.update_traces(textposition="top center");st.plotly_chart(plot_layout(fig,380),use_container_width=True,config=PLOT_CONFIG)
-    st.warning("Nilai Routing adalah decision metric untuk membandingkan alternatif alokasi, bukan GP akuntansi PC3.")
+    st.markdown(
+        '<div style="background:#FFF9B8;border:1px solid #E8D95A;border-radius:10px;'
+        'padding:0.85rem 1rem;color:#17384C!important;font-size:0.82rem;line-height:1.45;">'
+        '<b>Catatan:</b> Nilai Routing adalah decision metric untuk membandingkan '
+        'alternatif alokasi, bukan GP akuntansi PC3.'
+        '</div>',
+        unsafe_allow_html=True,
+    )
 
 else:
     section_header("Data & Asumsi","Sumber angka dan parameter yang masih perlu divalidasi")
